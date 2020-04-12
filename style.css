@@ -1,0 +1,115 @@
+body,
+html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: 'Arial Narrow';
+  overflow: hidden;
+}
+
+.line {
+  fill: none;
+  stroke-width: 3px;
+}
+
+.linecases {
+  stroke: steelblue;
+}
+
+.linedeath {
+  stroke: red;
+}
+
+.linecasesdaily {
+  stroke: green;
+}
+
+.linedeathdaily {
+  stroke: magenta;
+}
+
+.circle {
+  fill: steelblue;
+}
+
+.even-flex {
+  flex: 1 1 0;
+}
+
+.all-caps {
+  text-transform: uppercase;
+}
+
+.little-padding {
+  padding: .15rem;
+}
+
+a {
+  color: rgb(215, 25, 32);
+  /* Official red accent */
+}
+
+.flex_container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.flex_title {
+  background-color: black;
+  color: white;
+  flex: 0 0 50px;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+}
+
+.big-text {
+  font-size: 30px;
+}
+
+.medium-text {
+  font-size: 20px;
+}
+
+
+.flex_subtitle {
+  background-color: #BCBBBA;
+  flex: 0 0 30px;
+  padding: 5px;
+  font-size: 15px;
+}
+
+.image-container {
+  flex: 1 1 0;
+  background-color: white;
+  padding: 0;
+  margin: 0;
+  /* Resize the background image to cover the entire container */
+}
+
+.flex_footer {
+  /*background-color: #BCBBBA;*/
+  flex: 0 0 35px;
+  color: black;
+  line-height: 35px;
+  padding: 5px;
+}
+
+.hide-small {
+  display: visible;
+}
+
+@media screen and (max-width: 992px) {
+  .big-text {
+    font-size: 20px;
+  }
+
+  .medium-text {
+    font-size: 15px;
+  }
+
+  .hide-small {
+    display: none;
+  }
+}

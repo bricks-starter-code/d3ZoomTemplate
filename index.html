@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>D3 Template</title>
+  <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <link rel="stylesheet" type="text/css" href="style.css">
+  <link rel="stylesheet" type="text/css" href="custom.css">
+</head>
+
+<body>
+  <div class="flex_container" id="app">
+    <div class="flex_title">
+      <div class="even-flex all-caps big-text">D3 Zoom Template</div>
+    </div>
+    <div class="flex_subtitle" style="clear:both">
+      Pan and zoom (mouse or touch) to explore.
+    </div>
+    <div class="image-container" id="image-container" style="text-align:center">
+      <svg id="mySVG"></svg>
+    </div>
+    <div class="flex_footer hide-small">
+      Footer
+    </div>
+  </div>
+
+  <!-- External libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/5.15.0/d3.js" crossorigin="anonymous"></script>
+  <script src='https://code.jquery.com/jquery-3.2.1.min.js'></script>
+  <script src='https://unpkg.com/vue'></script>
+
+  <script type="module">
+    // Based partially on GNU v 3 licensed  https://bl.ocks.org/nsonnad/bbbabe4c3393d4f3bf8db90c32a38fc3
+    // Based partially on  MIT licensed https://bl.ocks.org/gordlea/27370d1eea8464b04538e6d8ced39e89
+    // Based partially on https://observablehq.com/@d3/zoomable-scatterplot?collection=@d3/d3-zoom 
+    // Based partially on https://bl.ocks.org/curran/76d8a075dee5420c01e35742f8598332
+
+    var app = new Vue({
+      el: '#app',
+      data: {
+        max_width: 0,
+        max_height: 0,
+        data: [],
+        gGrid: {},
+        gDot: {},
+        gx: {},
+        gy: {},
+      },
+      mounted() {
+        /** Generate random data */
+        const random = d3.randomNormal(0, 0.2);
+        const sqrt3 = Math.sqrt(3);
+        this.data = [].concat(
+          Array.from({ length: 300 }, () => [random() + sqrt3, random() + 1, 0]),
+          Array.from({ length: 300 }, () => [random() - sqrt3, random() + 1, 1]),
+          Array.from({ length: 300 }, () => [random(), random() - 1, 2])
+        )
+
+        /** Fit the SVG element to the window */
+        this.max_width = getWidth();
+        this.max_height = getHeight();
+
+        this.svg = d3.select("svg")
+          .attr("viewBox", [0, 0, this.max_width, this.max_height])
+          .attr("width", this.max_width)
+          .attr("height", this.max_height);
+
+        /** Initiallize the container groups */
+        this.gGrid = this.svg.append("g");
+        this.gDot = this.svg.append("g")
+          .attr("fill", "none")
+          .attr("stroke-linecap", "round");
+        this.gx = this.svg.append("g");
+        this.gy = this.svg.append("g");
+
+        /** Fire the creation of our data */
+        this.resizeEvent();
+      },
+      methods: {
+        resizeEvent() {
+          /** Reset the size of the svg element */
+          this.max_width = getWidth();
+          this.max_height = getHeight();
+
+          this.svg
+            .attr("viewBox", [0, 0, this.max_width, this.max_height])
+            .attr("width", this.max_width)
+            .attr("height", this.height);
+
+          /** Show the data */
+          this.process();
+        },
+        process() {
+          /** Get the size and aspect ration of the svg element */
+          let width = getWidth();
+          let height = getHeight();
+          let k = height / width;
+
+          /** Setup the x scale */
+          let x = d3.scaleLinear()
+            .domain([-4.5, 4.5])
+            .range([0, width])
+
+          /** Setup the y scale */
+          let y = d3.scaleLinear()
+            .domain([-4.5 * k, 4.5 * k])
+            .range([height, 0])
+
+          /** Setup the color 'scale' */
+          let z = d3.scaleOrdinal()
+            .domain(this.data.map(d => d[2]))
+            .range(d3.schemeCategory10)
+
+          /** Setup othe x axis */
+          let xAxis = (g, x) => g
+            .attr("transform", `translate(0,${height})`)
+            .call(d3.axisTop(x).ticks(12))
+            .call(g => g.select(".domain").attr("display", "none"))
+
+          /** setup the y axis */
+          let yAxis = (g, y) => g
+            .call(d3.axisRight(y).ticks(12 * k))
+            .call(g => g.select(".domain").attr("display", "none"))
+
+          /** Setup the grid */
+          let grid = (g, x, y) => g
+            .attr("stroke", "currentColor")
+            .attr("stroke-opacity", 0.1)
+            //Create the vertical lines
+            .call(g => g
+              .selectAll(".x")
+              .data(x.ticks(12))
+              .join(
+                enter => enter.append("line").attr("class", "x"),
+                update => update,
+                exit => exit.remove()
+              )
+              .attr("y2", this.max_height)
+              .attr("x1", d => 0.5 + x(d))
+              .attr("x2", d => 0.5 + x(d)))
+            //Create the horizontal lines
+            .call(g => g
+              .selectAll(".y")
+              .data(y.ticks(12 * k))
+              .join(
+                enter => enter.append("line").attr("class", "y"),
+                update => update,
+                exit => exit.remove()
+              )
+              .attr("x2", this.max_width)
+              .attr("y1", d => 0.5 + y(d))
+              .attr("y2", d => 0.5 + y(d)));
+
+          //Get a reference to this for other scopes
+          let that = this;
+
+          //Handle zoom events
+          const zoom = d3.zoom()
+            //Set the zoom limits
+            .scaleExtent([0.5, 32])
+            .on("zoom", zoomed);
+
+          /** Draw the points */
+          this.gDot.selectAll("path")
+            .data(this.data, d => d[0] + d[1] + d[2])
+            .join(
+              enter => enter.append("path"),
+              update => update,
+              exit => exit.remove(),
+            )
+            .attr("d", d => `M${x(d[0])},${y(d[1])}h0`)
+            .attr("stroke", d => z(d[2]));
+
+          /** Call the zoom function */
+          this.svg.call(zoom).call(zoom.transform, d3.zoomIdentity);
+
+          /** Handle any zoom events */
+          function zoomed() {
+            const transform = d3.event.transform;
+            const zx = transform.rescaleX(x).interpolate(d3.interpolateRound);
+            const zy = transform.rescaleY(y).interpolate(d3.interpolateRound);
+            that.gDot.attr("transform", transform).attr("stroke-width", 5 / transform.k);
+            that.gx.call(xAxis, zx);
+            that.gy.call(yAxis, zy);
+            that.gGrid.call(grid, zx, zy);
+          };
+
+        },
+      }
+    });
+
+    /** Get the width of the svg element */
+    function getWidth() {
+      let width = window.innerWidth;
+      return width;
+    }
+
+    /** Get height of the svg element */
+    function getHeight() {
+      let height = window.innerHeight;
+
+      let a = document.getElementsByClassName("flex_subtitle")[0];
+      let b = document.getElementsByClassName("flex_title")[0];
+      let c = document.getElementsByClassName("flex_footer")[0];
+      height -= (a.offsetHeight + b.offsetHeight + c.offsetHeight)
+
+      return height;
+    }
+
+    /** listen for changes in the svg element size */
+    window.addEventListener('resize', app.resizeEvent)
+
+  </script>
+</body>
+</html>
