@@ -36,26 +36,44 @@
     // Based partially on https://observablehq.com/@d3/zoomable-scatterplot?collection=@d3/d3-zoom 
     // Based partially on https://bl.ocks.org/curran/76d8a075dee5420c01e35742f8598332
 
+    import data from "./data.js";
+
+
     var app = new Vue({
       el: '#app',
       data: {
+        data: [],
+        locations: [],
+        times: [],
         max_width: 0,
         max_height: 0,
         data: [],
         gGrid: {},
         gDot: {},
+        gFixed: {},
         gx: {},
         gy: {},
+        //first: true,
+        locations: {},
+        times: {},
+        xOffset:35,
+        yOffset:35,
       },
       mounted() {
         /** Generate random data */
         const random = d3.randomNormal(0, 0.2);
         const sqrt3 = Math.sqrt(3);
-        this.data = [].concat(
-          Array.from({ length: 300 }, () => [random() + sqrt3, random() + 1, 0]),
-          Array.from({ length: 300 }, () => [random() - sqrt3, random() + 1, 1]),
-          Array.from({ length: 300 }, () => [random(), random() - 1, 2])
-        )
+
+        this.data = data;
+        this.locations = [...new Set(this.data.map(i => i.location))]
+        this.times = [...new Set(this.data.map(i => i.time))]
+        this.data.forEach(d => d.y = this.locations.indexOf(d.location))
+        this.data.forEach(d => d.x = this.times.indexOf(d.time))
+        
+
+        this.data.forEach(d => d.events = d.events || [])
+        this.data.forEach(d => d.events.forEach(e => e.x = d.x))
+        this.data.forEach(d => d.events.forEach(e => e.y = d.y))
 
         /** Fit the SVG element to the window */
         this.max_width = getWidth();
@@ -68,7 +86,18 @@
 
         /** Initiallize the container groups */
         this.gGrid = this.svg.append("g");
-        this.gDot = this.svg.append("g")
+
+
+
+        this.gDot = this.svg.selectAll('.gDot')
+          .data(this.data, d => d.location + d.time)
+          .join(
+            enter => enter.append("g"),
+            update => update,
+            exit => exit.remove()
+
+          )
+          .classed("gDot", true)
           .attr("fill", "none")
           .attr("stroke-linecap", "round");
         this.gx = this.svg.append("g");
@@ -109,7 +138,7 @@
 
           /** Setup the color 'scale' */
           let z = d3.scaleOrdinal()
-            .domain(this.data.map(d => d[2]))
+            .domain(this.data.map(d => 0))
             .range(d3.schemeCategory10)
 
           /** Setup othe x axis */
@@ -131,11 +160,8 @@
             .call(g => g
               .selectAll(".x")
               .data(x.ticks(12))
-              .join(
-                enter => enter.append("line").attr("class", "x"),
-                update => update,
-                exit => exit.remove()
-              )
+              .join("line")
+              .classed("x", true)
               .attr("y2", this.max_height)
               .attr("x1", d => 0.5 + x(d))
               .attr("x2", d => 0.5 + x(d)))
@@ -143,11 +169,8 @@
             .call(g => g
               .selectAll(".y")
               .data(y.ticks(12 * k))
-              .join(
-                enter => enter.append("line").attr("class", "y"),
-                update => update,
-                exit => exit.remove()
-              )
+              .join("line")
+              .classed("y", true)
               .attr("x2", this.max_width)
               .attr("y1", d => 0.5 + y(d))
               .attr("y2", d => 0.5 + y(d)));
@@ -163,14 +186,49 @@
 
           /** Draw the points */
           this.gDot.selectAll("path")
-            .data(this.data, d => d[0] + d[1] + d[2])
+            .data(this.data, d => "" + d.x + d.y)
+            .join("path")
+            .attr("d", d => `M${x(d.x)},${y(d.y)}h0`)
+            .attr("stroke", d => z(0));
+
+          this.gDot.selectAll(".event")
+            .data((d, i) => d.events || [], d => d.name + d.reference)
+            .join("text")
+            .classed("event", true)
+            .text(d => d.name + " " + (d.references || []).join(", "))
+            .attr("transform", (d, i) => `translate( ${x(d.x)} ${y(d.y) - i * 15})`)
+
+          this.gFixedLocations = this.svg.selectAll(".gFixedLocations")
+            .data(this.locations, d => d.location + d.time)
+            .join("g")
+            .classed("gFixedLocations", true)
+            .attr("transform", (d, i) => `translate(${that.xOffset} ${y(i)})`)
+
+          this.gFixedTimes = this.svg.selectAll(".gFixedTimes")
+            .data(this.times, d => d.location + d.time)
+            .join("g")
+            .classed("gFixedTimes", true)
+            .attr("transform", (d, i) => `translate(${x(i)} ${that.max_height-that.yOffset})`)
+
+
+
+          this._locations = this.gFixedLocations.selectAll('.locations')
+            .data(d => [d], d => d)
             .join(
-              enter => enter.append("path"),
+              enter => enter.append("text"),
               update => update,
               exit => exit.remove(),
             )
-            .attr("d", d => `M${x(d[0])},${y(d[1])}h0`)
-            .attr("stroke", d => z(d[2]));
+            .classed('locations', true)
+            .text(d => d)
+
+
+          this._times = this.gFixedTimes.selectAll('.times')
+            .data(d=>[d], d => d)
+            .join("text")
+            .classed('times', true)
+            .text(d => d)
+            
 
           /** Call the zoom function */
           this.svg.call(zoom).call(zoom.transform, d3.zoomIdentity);
@@ -184,6 +242,11 @@
             that.gx.call(xAxis, zx);
             that.gy.call(yAxis, zy);
             that.gGrid.call(grid, zx, zy);
+            that.gFixedTimes.attr("transform", (d, i) => `translate(${zx(i)} ${that.max_height-that.yOffset})`).attr("stroke-width", 5 / transform.k)
+            that.gFixedLocations.attr("transform", (d, i) => `translate(${that.xOffset} ${zy(i)})`).attr("stroke-width", 5 / transform.k)
+
+
+
           };
 
         },
@@ -213,4 +276,5 @@
 
   </script>
 </body>
+
 </html>
